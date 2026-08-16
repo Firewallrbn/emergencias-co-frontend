@@ -21,7 +21,9 @@ import {
   NavigationControl,
   type GeoJSONSource,
 } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+// El CSS NO se importa aquí: al cargarse este componente con next/dynamic, su hoja
+// acababa en un chunk aparte que no siempre llegaba a tiempo y el mapa salía en blanco.
+// Vive en app/globals.css.
 import { CENTRO_CIUDAD, COLOR_PRIORIDAD, type Ciudad, type Prioridad } from '@/lib/dominio';
 
 export interface PuntoEmergencia {

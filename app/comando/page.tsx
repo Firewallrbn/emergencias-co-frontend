@@ -61,7 +61,38 @@ export default function PaginaComando() {
   );
   const [ultimoEvento, setUltimoEvento] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sesion, setSesion] = useState<'comprobando' | 'con-sesion' | 'sin-sesion'>('comprobando');
+  const [correo, setCorreo] = useState<string | null>(null);
   const contadorEventos = useRef(0);
+
+  // --- Sesión --------------------------------------------------------------------
+  // Se comprueba antes de intentar nada. Sin ella, RLS no devuelve una sola fila y el
+  // panel mostraría una pantalla vacía con un error técnico que no le sirve a nadie:
+  // mejor decir directamente que hay que entrar.
+  useEffect(() => {
+    const supabase = obtenerSupabase();
+    if (!supabase) {
+      setSesion('sin-sesion');
+      return;
+    }
+
+    void supabase.auth.getSession().then(({ data }) => {
+      setSesion(data.session ? 'con-sesion' : 'sin-sesion');
+      setCorreo(data.session?.user.email ?? null);
+    });
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_evento, s) => {
+      setSesion(s ? 'con-sesion' : 'sin-sesion');
+      setCorreo(s?.user.email ?? null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  async function salir() {
+    await obtenerSupabase()?.auth.signOut();
+    setEmergencias([]);
+    setDespachos([]);
+  }
 
   // --- Carga inicial y datos derivados -------------------------------------------
   const cargar = useCallback(async () => {
@@ -145,6 +176,42 @@ export default function PaginaComando() {
 
   const porPrioridad = (p: Prioridad) => emergencias.filter((e) => e.prioridad === p).length;
 
+  if (sesion === 'comprobando') {
+    return (
+      <main className="mx-auto w-full max-w-md px-4 py-16">
+        <div className="h-24 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />
+      </main>
+    );
+  }
+
+  if (sesion === 'sin-sesion') {
+    return (
+      <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-4 py-10">
+        <Link href="/" className="mb-6 text-sm text-neutral-600 underline underline-offset-4 dark:text-neutral-400">
+          Inicio
+        </Link>
+        <h1 className="text-2xl font-bold">Panel de comando</h1>
+        <p className="mt-3 text-neutral-700 dark:text-neutral-300">
+          Este panel es para los organismos de socorro y requiere iniciar sesión.
+        </p>
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+          No es solo una pantalla de bienvenida: las políticas de seguridad de la base de
+          datos no devuelven ninguna emergencia a una sesión anónima, así que el panel
+          estaría vacío de todas formas.
+        </p>
+        <Link
+          href="/entrar"
+          className="mt-6 block rounded-lg bg-neutral-900 p-4 text-center font-semibold text-white dark:bg-white dark:text-neutral-900"
+        >
+          Iniciar sesión
+        </Link>
+        <Link href="/reportar" className="mt-4 text-center text-sm underline underline-offset-4">
+          ¿Necesitas reportar una emergencia? No hace falta cuenta.
+        </Link>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6">
       <header className="mb-6">
@@ -154,10 +221,22 @@ export default function PaginaComando() {
           </Link>
           <IndicadorRealtime estado={estadoRealtime} ultimoEvento={ultimoEvento} />
         </div>
-        <h1 className="text-2xl font-bold">Panel de comando</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Cruz Roja · Bomberos · Defensa Civil · UNGRD
-        </p>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-bold">Panel de comando</h1>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+              Cruz Roja · Bomberos · Defensa Civil · UNGRD
+            </p>
+          </div>
+          {correo && (
+            <p className="text-xs text-neutral-600 dark:text-neutral-400">
+              {correo}
+              <button onClick={() => void salir()} className="ml-2 underline underline-offset-4">
+                Salir
+              </button>
+            </p>
+          )}
+        </div>
       </header>
 
       <nav className="mb-4 flex flex-wrap gap-2" aria-label="Ciudad">
