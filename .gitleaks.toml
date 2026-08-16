@@ -25,15 +25,18 @@ description = "URL de proyecto Supabase hardcodeada (debe venir de NEXT_PUBLIC_S
 regex = '''https:\/\/[a-z]{20}\.supabase\.co'''
 tags = ["supabase", "config"]
 
-[allowlist]
+# `[[allowlists]]` en plural: la forma singular queda anulada al combinarse con
+# `[extend] useDefault = true` y las excepciones se ignoran en silencio.
+[[allowlists]]
 description = "Excepciones controladas"
 paths = [
   '''\.gitleaks\.toml$''',
   '''package-lock\.json$''',
   '''\.env\.example$''',
 ]
+regexTarget = "line"
 regexes = [
-  '''<[A-Z_]+>''',
+  '''<[A-Za-z_][A-Za-z0-9_-]*>''',
   '''\$\{[A-Za-z_]+\}''',
   '''process\.env\.[A-Z_]+''',
   '''(EJEMPLO|PLACEHOLDER|REEMPLAZAR|xxxxx)''',
