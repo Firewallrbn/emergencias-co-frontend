@@ -20,6 +20,7 @@ import {
   Popup,
   NavigationControl,
   type GeoJSONSource,
+  type StyleSpecification,
 } from 'maplibre-gl';
 // El CSS NO se importa aquí: al cargarse este componente con next/dynamic, su hoja
 // acababa en un chunk aparte que no siempre llegaba a tiempo y el mapa salía en blanco.
@@ -49,7 +50,43 @@ interface Props {
   clusters: PuntoCaliente[];
 }
 
-const ESTILO = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
+/**
+ * Estilo ráster declarado en línea, en vez del `style.json` vectorial de CARTO.
+ *
+ * El estilo vectorial cargaba —la atribución aparecía y los marcadores se posicionaban
+ * bien— pero el lienzo salía completamente en blanco. La pista está en QUÉ se dibujaba:
+ * marcadores, controles y atribución son elementos del DOM, y todos funcionaban; lo único
+ * vacío era el canvas de WebGL. MapLibre descarga las teselas vectoriales y las convierte
+ * a geometría en un Web Worker, y ese worker es lo que suele romperse en silencio al
+ * empaquetar con Turbopack: las teselas se descargan y nunca se pintan.
+ *
+ * Con teselas ráster no hay nada que parsear: son imágenes que el navegador dibuja
+ * directamente. Se pierde el zoom infinito y la rotación de etiquetas, que a un panel de
+ * despacho no le hacen falta, y se gana que funcione. Además pesa menos en la red
+ * degradada del escenario del enunciado.
+ */
+const ESTILO: StyleSpecification = {
+  version: 8,
+  sources: {
+    carto: {
+      type: 'raster',
+      tiles: [
+        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>, &copy; OpenStreetMap',
+    },
+  },
+  layers: [
+    // Un fondo explícito: sin él, las zonas sin tesela quedan transparentes y se ve el
+    // color de la página, que en modo oscuro produce huecos negros en mitad del mapa.
+    { id: 'fondo', type: 'background', paint: { 'background-color': '#f2f2f0' } },
+    { id: 'carto', type: 'raster', source: 'carto' },
+  ],
+};
 
 export default function MapaEmergencias({ ciudad, emergencias, clusters }: Props) {
   const contenedor = useRef<HTMLDivElement | null>(null);
@@ -68,6 +105,13 @@ export default function MapaEmergencias({ ciudad, emergencias, clusters }: Props
       attributionControl: { compact: true },
     });
     mapa.current.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+
+    // Sin esto, un fallo de teselas o de estilo no deja rastro: el mapa simplemente sale
+    // en blanco y la consola queda limpia. Ya pasó una vez; que no vuelva a pasar en
+    // silencio.
+    mapa.current.on('error', (e) => {
+      console.error('[mapa] fallo de MapLibre:', e.error?.message ?? e);
+    });
 
     return () => {
       mapa.current?.remove();
