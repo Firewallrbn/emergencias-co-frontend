@@ -1,0 +1,40 @@
+title = "emergencias-co-frontend — política de cero secretos"
+
+[extend]
+useDefault = true
+
+# El enunciado autoriza la anon key SOLO inyectada desde Vercel Project Settings.
+# Ni siquiera la anon key debe quedar escrita en el repositorio, y la service_role
+# key no debe existir en ninguna parte del sistema.
+
+[[rules]]
+id = "supabase-jwt"
+description = "JWT de Supabase (anon o service_role). Debe inyectarse desde Vercel, nunca commitearse."
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'''
+tags = ["supabase", "jwt"]
+
+[[rules]]
+id = "supabase-api-key-new"
+description = "Llave de API de Supabase en formato nuevo (sb_secret_ / sb_publishable_)"
+regex = '''sb_(secret|publishable)_[A-Za-z0-9_-]{20,}'''
+tags = ["supabase"]
+
+[[rules]]
+id = "supabase-project-url"
+description = "URL de proyecto Supabase hardcodeada (debe venir de NEXT_PUBLIC_SUPABASE_URL)"
+regex = '''https:\/\/[a-z]{20}\.supabase\.co'''
+tags = ["supabase", "config"]
+
+[allowlist]
+description = "Excepciones controladas"
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''package-lock\.json$''',
+  '''\.env\.example$''',
+]
+regexes = [
+  '''<[A-Z_]+>''',
+  '''\$\{[A-Za-z_]+\}''',
+  '''process\.env\.[A-Z_]+''',
+  '''(EJEMPLO|PLACEHOLDER|REEMPLAZAR|xxxxx)''',
+]
