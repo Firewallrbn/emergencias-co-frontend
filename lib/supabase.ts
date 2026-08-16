@@ -39,3 +39,26 @@ export function obtenerSupabase(): SupabaseClient | null {
 }
 
 export const hayRealtime = (): boolean => Boolean(url && anonKey);
+
+/**
+ * Rol de aplicación de la sesión actual.
+ *
+ * Vive en `app_metadata`, no en `user_metadata`, y la diferencia es de seguridad, no de
+ * gusto: `user_metadata` lo puede editar la propia persona desde el cliente, así que
+ * cualquiera podría ascenderse a operador. `app_metadata` solo se modifica desde el
+ * servidor.
+ *
+ * De todas formas esto es únicamente para decidir qué se dibuja. Quien decide qué datos
+ * salen de la base es RLS: aunque alguien falsee esta función en su navegador, seguiría
+ * sin recibir una sola fila que no le corresponda.
+ */
+export type RolApp = 'ciudadano' | 'operador';
+
+export async function obtenerRol(): Promise<RolApp | null> {
+  const supabase = obtenerSupabase();
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return null;
+  const rol = (data.user.app_metadata as { app_role?: string } | undefined)?.app_role;
+  return rol === 'operador' ? 'operador' : 'ciudadano';
+}

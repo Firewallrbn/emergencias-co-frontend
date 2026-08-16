@@ -21,6 +21,7 @@ import Link from 'next/link';
 import {
   CIUDADES,
   NOMBRE_CIUDAD,
+  CENTRO_CIUDAD,
   COLOR_PRIORIDAD,
   ETIQUETA_PRIORIDAD,
   type Ciudad,
@@ -46,7 +47,8 @@ interface FilaEmergencia {
   descripcion: string;
   triage_score: number;
   creado_en: string;
-  geom?: unknown;
+  lon?: number;
+  lat?: number;
 }
 
 export default function PaginaComando() {
@@ -85,19 +87,25 @@ export default function PaginaComando() {
     let activo = true;
 
     const cargarEmergencias = async () => {
+      // Se lee de `public.v_emergencias`, no de `intake.emergencias`. Supabase solo sirve
+      // por su API los schemas declarados como expuestos, y los nuestros no lo están: una
+      // consulta directa devuelve PGRST106 "Invalid schema". La vista además entrega
+      // lon/lat como números, en vez del WKB hexadecimal en que sale una geografía.
       const { data, error: err } = await supabase
-        .schema('intake')
-        .from('emergencias')
-        .select('id, tipo, ciudad, prioridad, descripcion, triage_score, creado_en')
+        .from('v_emergencias')
+        .select('id, tipo, ciudad, prioridad, descripcion, triage_score, lon, lat, creado_en')
         .eq('ciudad', ciudad)
         .order('prioridad')
         .limit(200);
 
       if (!activo) return;
       if (err) {
-        // Un fallo de RLS aquí no es un bug: significa que la sesión no tiene rol de
-        // operador. Se dice con claridad en vez de dejar la tabla vacía sin explicación.
-        setError(`Sin acceso a las emergencias (${err.message}). ¿Iniciaste sesión como operador?`);
+        // Esto no es un bug: significa que la sesión no tiene permiso. Se dice con
+        // claridad en vez de dejar la pantalla vacía sin explicación.
+        setError(
+          'No hay acceso a las emergencias. Inicia sesión como operador para verlas: ' +
+            'las políticas RLS de la base no devuelven filas a una sesión anónima.',
+        );
         return;
       }
       setEmergencias((data ?? []).map(aPunto));
@@ -259,41 +267,24 @@ export default function PaginaComando() {
   );
 }
 
+/**
+ * Convierte una fila en un punto del mapa.
+ *
+ * Las coordenadas vienen ya proyectadas desde la vista. Los eventos de Realtime, en
+ * cambio, traen la fila CRUDA de la tabla, donde `geom` es WKB y no hay lon/lat: en ese
+ * caso se cae al centro de la ciudad, que es suficiente para que el marcador aparezca de
+ * inmediato. La siguiente recarga lo coloca en su sitio exacto.
+ */
 function aPunto(f: FilaEmergencia): PuntoEmergencia {
-  // Supabase devuelve `geom` como WKB hexadecimal, que no vale para pintar. Se resuelve
-  // en el servidor con una vista o, como aquí, se usa el centro conocido con dispersión
-  // determinista a partir del id, para que los puntos no se apilen exactamente encima.
-  const [lon, lat] = dispersar(f.id, f.ciudad);
+  const centro = CENTRO_CIUDAD[(f.ciudad as Ciudad)] ?? CENTRO_CIUDAD.cali;
   return {
     id: f.id,
-    lon,
-    lat,
+    lon: typeof f.lon === 'number' ? f.lon : centro[0],
+    lat: typeof f.lat === 'number' ? f.lat : centro[1],
     prioridad: f.prioridad,
     tipo: f.tipo,
     descripcion: f.descripcion,
   };
-}
-
-/**
- * Dispersión determinista alrededor del centro de la ciudad.
- *
- * Provisional y honesta: el `geom` real es una geografía de PostGIS y llega serializada
- * como WKB, que este cliente no decodifica. Depender del id hace que un mismo reporte
- * caiga siempre en el mismo sitio, en vez de saltar por el mapa en cada refresco.
- */
-function dispersar(id: string, ciudad: string): [number, number] {
-  const centros: Record<string, [number, number]> = {
-    choco: [-76.6612, 5.6947],
-    pereira: [-75.6906, 4.8133],
-    cali: [-76.5225, 3.4516],
-    manizales: [-75.5138, 5.0703],
-  };
-  const centro = centros[ciudad] ?? centros.cali!;
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  const dx = ((h % 1000) / 1000 - 0.5) * 0.03;
-  const dy = (((h >> 10) % 1000) / 1000 - 0.5) * 0.03;
-  return [centro[0] + dx, centro[1] + dy];
 }
 
 function IndicadorRealtime({
