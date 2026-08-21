@@ -164,6 +164,7 @@ export interface Despacho {
   distancia_m: string | null;
   unidad: string | null;
   organismo: string | null;
+  tipo: string | null;
   creado_en: string;
 }
 

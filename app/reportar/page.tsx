@@ -350,16 +350,31 @@ function CampoCriticoEntrada({
     'w-full rounded-lg border-2 border-neutral-300 p-3 text-base dark:border-neutral-700 dark:bg-neutral-900';
 
   if (campo.tipo === 'numero') {
+    // permitirDesconocido: checkbox "No sé" que pone el valor a null para que el backend
+    // calcule triage sin ese campo en vez de asumir 0.
+    const desconocido = valor === null;
     return (
       <Campo etiqueta={campo.etiqueta} ayuda={campo.ayuda}>
         <input
           type="number"
           min={0}
           inputMode="numeric"
-          value={(valor as number) ?? ''}
+          disabled={desconocido}
+          value={desconocido ? '' : ((valor as number) ?? '')}
           onChange={(e) => alCambiar(e.target.value === '' ? undefined : Number(e.target.value))}
           className={clase}
         />
+        {campo.permitirDesconocido && (
+          <label className="mt-2 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+            <input
+              type="checkbox"
+              checked={desconocido}
+              onChange={(e) => alCambiar(e.target.checked ? null : undefined)}
+              className="size-4"
+            />
+            No lo sé con exactitud
+          </label>
+        )}
       </Campo>
     );
   }
@@ -384,10 +399,14 @@ function CampoCriticoEntrada({
   }
 
   if (campo.tipo === 'seleccion') {
+    // Al elegir "otro" y el campo tiene permitirOtro, aparece un input de texto libre.
+    const valActual = (valor as string) ?? '';
+    const esOtroPersonalizado = valActual.startsWith('otro:');
+    const selBase = esOtroPersonalizado ? 'otro' : valActual;
     return (
       <Campo etiqueta={campo.etiqueta} ayuda={campo.ayuda}>
         <select
-          value={(valor as string) ?? ''}
+          value={selBase}
           onChange={(e) => alCambiar(e.target.value || undefined)}
           className={clase}
         >
@@ -397,13 +416,25 @@ function CampoCriticoEntrada({
               {o.etiqueta}
             </option>
           ))}
+          {campo.permitirOtro && <option value="otro">Otro</option>}
         </select>
+        {campo.permitirOtro && selBase === 'otro' && (
+          <input
+            type="text"
+            placeholder="Describe cuál…"
+            defaultValue={esOtroPersonalizado ? valActual.slice(5) : ''}
+            className={`${clase} mt-2`}
+            onChange={(e) => alCambiar(e.target.value ? `otro:${e.target.value}` : 'otro')}
+          />
+        )}
       </Campo>
     );
   }
 
-  // multiple
+  // multiple — incluye texto libre cuando "otro" está marcado y campo.permitirOtro
   const seleccionados = (valor as string[]) ?? [];
+  const otroTexto = seleccionados.find((v) => v.startsWith('otro:'))?.slice(5) ?? '';
+  const tieneOtro = seleccionados.some((v) => v === 'otro' || v.startsWith('otro:'));
   return (
     <Campo etiqueta={campo.etiqueta} ayuda={campo.ayuda}>
       <div className="space-y-2">
@@ -414,19 +445,45 @@ function CampoCriticoEntrada({
           >
             <input
               type="checkbox"
-              checked={seleccionados.includes(o.valor)}
-              onChange={(e) =>
-                alCambiar(
-                  e.target.checked
-                    ? [...seleccionados, o.valor]
-                    : seleccionados.filter((v) => v !== o.valor),
-                )
-              }
+              checked={seleccionados.some((v) => v === o.valor || v.startsWith(`${o.valor}:`))}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  alCambiar([...seleccionados.filter((v) => !v.startsWith(o.valor)), o.valor]);
+                } else {
+                  alCambiar(seleccionados.filter((v) => v !== o.valor && !v.startsWith(`${o.valor}:`)));
+                }
+              }}
               className="size-5"
             />
             <span>{o.etiqueta}</span>
           </label>
         ))}
+        {campo.permitirOtro && (
+          <label className="flex items-center gap-3 rounded-lg border-2 border-neutral-300 p-3 dark:border-neutral-700">
+            <input
+              type="checkbox"
+              checked={tieneOtro}
+              onChange={(e) => {
+                const sinOtro = seleccionados.filter((v) => v !== 'otro' && !v.startsWith('otro:'));
+                alCambiar(e.target.checked ? [...sinOtro, 'otro'] : sinOtro);
+              }}
+              className="size-5"
+            />
+            <span>Otro</span>
+          </label>
+        )}
+        {campo.permitirOtro && tieneOtro && (
+          <input
+            type="text"
+            placeholder="Describe el otro riesgo…"
+            defaultValue={otroTexto}
+            className={`${clase} mt-1`}
+            onChange={(e) => {
+              const sinOtro = seleccionados.filter((v) => v !== 'otro' && !v.startsWith('otro:'));
+              alCambiar(e.target.value ? [...sinOtro, `otro:${e.target.value}`] : [...sinOtro, 'otro']);
+            }}
+          />
+        )}
       </div>
     </Campo>
   );

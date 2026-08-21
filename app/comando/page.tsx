@@ -24,10 +24,11 @@ import {
   CENTRO_CIUDAD,
   COLOR_PRIORIDAD,
   ETIQUETA_PRIORIDAD,
+  ETIQUETA_TIPO,
   type Ciudad,
   type Prioridad,
 } from '@/lib/dominio';
-import { obtenerClusters, obtenerDespachos, type Cluster, type Despacho } from '@/lib/api';
+import { obtenerClusters, obtenerDespachos, actualizarDespacho, type Cluster, type Despacho } from '@/lib/api';
 import { obtenerSupabase, hayRealtime } from '@/lib/supabase';
 import type { PuntoEmergencia } from '@/components/MapaEmergencias';
 
@@ -63,6 +64,7 @@ export default function PaginaComando() {
   const [error, setError] = useState<string | null>(null);
   const [sesion, setSesion] = useState<'comprobando' | 'con-sesion' | 'sin-sesion'>('comprobando');
   const [correo, setCorreo] = useState<string | null>(null);
+  const [actualizandoDespacho, setActualizandoDespacho] = useState<string | null>(null);
   const contadorEventos = useRef(0);
 
   // --- Sesión --------------------------------------------------------------------
@@ -105,6 +107,19 @@ export default function PaginaComando() {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar los datos');
     }
   }, [ciudad]);
+
+  const cambiarEstadoDespacho = useCallback(async (id: string, nuevoEstado: string) => {
+    setActualizandoDespacho(id);
+    try {
+      await actualizarDespacho(id, nuevoEstado);
+      // Actualizar la fila localmente sin necesidad de recargar todo.
+      setDespachos((prev) => prev.map((d) => (d.id === id ? { ...d, estado: nuevoEstado } : d)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo actualizar el despacho');
+    } finally {
+      setActualizandoDespacho(null);
+    }
+  }, []);
 
   useEffect(() => {
     void cargar();
@@ -318,25 +333,67 @@ export default function PaginaComando() {
                 <tr>
                   <th className="p-2 font-medium">Unidad</th>
                   <th className="p-2 font-medium">Organismo</th>
+                  <th className="p-2 font-medium">Tipo</th>
                   <th className="p-2 font-medium">Estado</th>
                   <th className="p-2 font-medium">Distancia</th>
                   <th className="p-2 font-medium">Creado</th>
+                  <th className="p-2 font-medium">Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {despachos.map((d) => (
-                  <tr key={d.id} className="border-b border-neutral-200 dark:border-neutral-800">
-                    <td className="p-2 font-mono">{d.unidad ?? '—'}</td>
-                    <td className="p-2">{d.organismo ?? '—'}</td>
-                    <td className="p-2">{d.estado}</td>
-                    <td className="p-2 tabular-nums">
-                      {d.distancia_m ? `${Math.round(Number(d.distancia_m))} m` : '—'}
-                    </td>
-                    <td className="p-2 text-neutral-600 dark:text-neutral-400">
-                      {new Date(d.creado_en).toLocaleTimeString('es-CO')}
-                    </td>
-                  </tr>
-                ))}
+                {despachos.map((d) => {
+                  const cargando = actualizandoDespacho === d.id;
+                  return (
+                    <tr key={d.id} className="border-b border-neutral-200 dark:border-neutral-800">
+                      <td className="p-2 font-mono">{d.unidad ?? '—'}</td>
+                      <td className="p-2">{d.organismo ?? '—'}</td>
+                      <td className="p-2 text-xs text-neutral-600 dark:text-neutral-400">
+                        {ETIQUETA_TIPO[(d.tipo as keyof typeof ETIQUETA_TIPO)] ?? d.tipo ?? '—'}
+                      </td>
+                      <td className="p-2">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${{
+                            pendiente: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+                            despachado: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                            atendido: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                          }[d.estado] ?? 'bg-neutral-100 text-neutral-700'}`}
+                        >
+                          {d.estado}
+                        </span>
+                      </td>
+                      <td className="p-2 tabular-nums">
+                        {d.distancia_m ? `${Math.round(Number(d.distancia_m))} m` : '—'}
+                      </td>
+                      <td className="p-2 text-neutral-600 dark:text-neutral-400">
+                        {new Date(d.creado_en).toLocaleTimeString('es-CO')}
+                      </td>
+                      <td className="p-2">
+                        {/* Avance de estado: pendiente → despachado → atendido */}
+                        {d.estado === 'pendiente' && (
+                          <button
+                            disabled={cargando}
+                            onClick={() => void cambiarEstadoDespacho(d.id, 'despachado')}
+                            className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-700 hover:bg-blue-50 disabled:opacity-50 dark:border-blue-700 dark:text-blue-300"
+                          >
+                            {cargando ? '…' : 'Despachar'}
+                          </button>
+                        )}
+                        {d.estado === 'despachado' && (
+                          <button
+                            disabled={cargando}
+                            onClick={() => void cambiarEstadoDespacho(d.id, 'atendido')}
+                            className="rounded border border-green-300 px-2 py-1 text-xs text-green-700 hover:bg-green-50 disabled:opacity-50 dark:border-green-700 dark:text-green-300"
+                          >
+                            {cargando ? '…' : 'Marcar atendido'}
+                          </button>
+                        )}
+                        {d.estado === 'atendido' && (
+                          <span className="text-xs text-neutral-400">✓</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
