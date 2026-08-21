@@ -174,3 +174,16 @@ export async function obtenerDespachos(ciudad?: Ciudad): Promise<Despacho[]> {
   const cuerpo = await r.json();
   return cuerpo.despachos ?? [];
 }
+
+export async function actualizarDespacho(id: string, estado: string, notas?: string): Promise<{ id: string; estado: string; unidad_id: string | null }> {
+  const r = await fetch(`${BASE}/v1/despachos/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ estado, notas }),
+  });
+  if (!r.ok) {
+    const errorCuerpo = await r.json().catch(() => ({}));
+    throw new Error(errorCuerpo.mensaje ?? `No se pudo actualizar el despacho (${r.status})`);
+  }
+  return await r.json();
+}

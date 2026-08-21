@@ -45,7 +45,19 @@ export interface CampoCritico {
   tipo: 'numero' | 'texto' | 'seleccion' | 'multiple' | 'booleano';
   opciones?: { valor: string; etiqueta: string }[];
   ayuda?: string;
+  /** Permite elegir "desconocido" en campos numéricos donde la persona no puede saber el dato. */
+  permitirDesconocido?: boolean;
+  /** Si la opción seleccionada es 'otro', muestra un campo de texto libre. */
+  permitirOtro?: boolean;
 }
+
+/** Etiquetas legibles por tipo de solicitud, para mostrar en popups y listas. */
+export const ETIQUETA_TIPO: Record<TipoSolicitud, string> = {
+  usar_medica: 'Rescate / Emergencia médica',
+  albergue: 'Albergue y refugio',
+  suministros: 'Suministros y asistencia',
+  danos: 'Evaluación de daños',
+};
 
 /**
  * Los cuatro tipos de solicitud con sus datos críticos, tomados literalmente de la tabla
@@ -60,18 +72,20 @@ export const TIPOS_SOLICITUD: DefinicionTipo[] = [
     descripcion: 'Personas atrapadas, heridas o en peligro inmediato',
     prioridadBase: 'P1',
     campos: [
-      { nombre: 'personas_atrapadas', etiqueta: 'Personas atrapadas', tipo: 'numero' },
-      { nombre: 'heridos', etiqueta: 'Personas heridas', tipo: 'numero' },
+      { nombre: 'personas_atrapadas', etiqueta: 'Personas atrapadas', tipo: 'numero', permitirDesconocido: true },
+      { nombre: 'heridos', etiqueta: 'Personas heridas', tipo: 'numero', permitirDesconocido: true },
       {
         nombre: 'riesgo_inminente',
         etiqueta: 'Riesgos presentes',
         tipo: 'multiple',
         ayuda: 'Marca todo lo que apliquen. Determina la urgencia del despacho.',
+        permitirOtro: true,
         opciones: [
           { valor: 'fuga_gas', etiqueta: 'Olor a gas' },
           { valor: 'fuego', etiqueta: 'Fuego' },
           { valor: 'colapso', etiqueta: 'Riesgo de derrumbe' },
           { valor: 'deslizamiento', etiqueta: 'Deslizamiento de tierra' },
+          { valor: 'otro', etiqueta: 'Otro riesgo' },
         ],
       },
     ],
@@ -102,11 +116,13 @@ export const TIPOS_SOLICITUD: DefinicionTipo[] = [
         nombre: 'categoria',
         etiqueta: 'Qué se necesita',
         tipo: 'seleccion',
+        permitirOtro: true,
         opciones: [
           { valor: 'agua_potable', etiqueta: 'Agua potable' },
           { valor: 'raciones_campana', etiqueta: 'Alimentos' },
           { valor: 'kits_primeros_auxilios', etiqueta: 'Kits de primeros auxilios' },
           { valor: 'medicamentos_cronicos', etiqueta: 'Medicamentos crónicos' },
+          { valor: 'otro', etiqueta: 'Otro' },
         ],
       },
       { nombre: 'personas', etiqueta: 'Personas afectadas', tipo: 'numero' },
@@ -122,10 +138,12 @@ export const TIPOS_SOLICITUD: DefinicionTipo[] = [
         nombre: 'tipo_edificacion',
         etiqueta: 'Tipo de edificación',
         tipo: 'seleccion',
+        permitirOtro: true,
         opciones: [
           { valor: 'residencial', etiqueta: 'Vivienda' },
           { valor: 'comercial', etiqueta: 'Local comercial' },
           { valor: 'infraestructura', etiqueta: 'Infraestructura pública' },
+          { valor: 'otro', etiqueta: 'Otro' },
         ],
       },
       {
